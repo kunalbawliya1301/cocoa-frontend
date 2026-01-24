@@ -8,6 +8,7 @@ import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 
+
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
@@ -18,37 +19,52 @@ export const CartPage = () => {
   const [loading, setLoading] = React.useState(false);
 
   const handleCheckout = async () => {
-    if (!user) {
-      toast.error('Please sign in to place an order');
-      navigate('/login');
-      return;
-    }
+  if (!user) {
+    toast.error('Please sign in to place an order');
+    navigate('/login');
+    return;
+  }
 
-    setLoading(true);
-    try {
-      const orderData = {
-        items: cart.map(item => ({
-          menu_item_id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-        })),
-        total_amount: getTotal(),
-      };
+  setLoading(true);
 
-      const response = await axios.post(`${API}/orders`, orderData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+  try {
+    // 1️⃣ Create Razorpay order from backend
+    const { data: razorpayOrder } = await axios.post(
+      `${API}/payments/create-order`,
+      { amount: getTotal() },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
 
-      toast.success('Order placed successfully!');
-      clearCart();
-      navigate(`/order/${response.data.id}`);
-    } catch (error) {
-      toast.error('Failed to place order');
-    } finally {
-      setLoading(false);
-    }
-  };
+    // 2️⃣ Open Razorpay checkout
+    const options = {
+      key: process.env.REACT_APP_RAZORPAY_KEY_ID,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+      name: "CoCoa Cafe",
+      description: "Order Payment",
+      order_id: razorpayOrder.id,
+
+      handler: function (response) {
+        console.log("Payment success:", response);
+        toast.success("Payment successful (not verified yet)");
+      },
+
+      theme: {
+        color: "#f472b6",
+      },
+    };
+
+    const rzp = new window.Razorpay(options);
+    rzp.open();
+
+  } catch (error) {
+    console.error(error);
+    toast.error("Failed to initiate payment");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   if (cart.length === 0) {
     return (
