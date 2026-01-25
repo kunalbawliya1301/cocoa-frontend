@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -18,67 +18,65 @@ const statusConfig = {
 };
 
 export const UserDashboard = () => {
-  const { user, token } = useAuth();
+  const { user, token, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const pollingRef = useRef(null);
 
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    fetchOrders();
-  }, [user]);
-
-  const fetchOrders = async () => {
+  const fetchOrders = async (silent = false) => {
     try {
-      const response = await axios.get(`${API}/orders/my-orders`, {
+      const res = await axios.get(`${API}/orders/my`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setOrders(response.data);
-    } catch (error) {
-      toast.error('Failed to load orders');
+      setOrders(res.data);
+    } catch {
+      if (!silent) toast.error('Failed to load orders');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  if (loading) {
+  useEffect(() => {
+    if (authLoading) return;               // ⛔ wait for auth restore
+
+    if (!user || !token) {
+      navigate('/login');
+      return;
+    }
+
+    fetchOrders();
+
+    pollingRef.current = setInterval(() => {
+      fetchOrders(true);
+    }, 10000);
+
+    return () => clearInterval(pollingRef.current);
+  }, [user, token, authLoading]);
+
+  if (authLoading || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" data-testid="dashboard-loading">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading orders...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-16 px-6 md:px-12" data-testid="user-dashboard">
+    <div className="min-h-screen pt-24 pb-16 px-6 md:px-12">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-heading font-bold text-primary mb-2">My Orders</h1>
-          <p className="text-muted-foreground">Track and manage your orders</p>
-        </div>
+        <h1 className="text-4xl font-bold mb-6">My Orders</h1>
 
         {orders.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-3xl border border-border" data-testid="no-orders-message">
-            <p className="text-lg text-muted-foreground mb-6">You haven't placed any orders yet</p>
-            <Button
-              onClick={() => navigate('/menu')}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full"
-              data-testid="browse-menu-button"
-            >
-              Browse Menu
-            </Button>
+          <div className="text-center py-16 bg-white rounded-xl">
+            <Button onClick={() => navigate('/menu')}>Browse Menu</Button>
           </div>
         ) : (
           <div className="space-y-4">
             {orders.map((order, idx) => {
               const StatusIcon = statusConfig[order.status]?.icon || Clock;
-              const statusInfo = statusConfig[order.status] || statusConfig.pending;
+              const statusInfo = statusConfig[order.status];
 
               return (
                 <motion.div
@@ -86,44 +84,20 @@ export const UserDashboard = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.05 }}
-                  className="bg-white rounded-2xl border border-border p-6 hover:shadow-lg transition-shadow cursor-pointer"
+                  className="bg-white p-6 rounded-xl cursor-pointer"
                   onClick={() => navigate(`/order/${order.id}`)}
-                  data-testid={`order-${order.id}`}
                 >
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className={`w-10 h-10 ${statusInfo.bg} rounded-full flex items-center justify-center`}>
-                          <StatusIcon className={`w-5 h-5 ${statusInfo.color}`} />
-                        </div>
-                        <div>
-                          <p className="font-heading font-semibold text-primary">Order #{order.id.slice(0, 8)}</p>
-                          <p className={`text-sm ${statusInfo.color} font-medium`}>{statusInfo.label}</p>
-                        </div>
+                  <div className="flex justify-between">
+                    <div className="flex gap-3">
+                      <div className={`w-10 h-10 ${statusInfo.bg} flex items-center justify-center rounded-full`}>
+                        <StatusIcon className={statusInfo.color} />
+                      </div>
+                      <div>
+                        <p className="font-semibold">Order #{order.id.slice(0, 8)}</p>
+                        <p className={statusInfo.color}>{statusInfo.label}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-heading font-bold text-primary">${order.total_amount.toFixed(2)}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-border pt-4">
-                    <p className="text-sm text-muted-foreground mb-2">{order.items.length} items</p>
-                    <div className="flex flex-wrap gap-2">
-                      {order.items.slice(0, 3).map((item, i) => (
-                        <span key={i} className="text-sm bg-muted px-3 py-1 rounded-full">
-                          {item.quantity}x {item.name}
-                        </span>
-                      ))}
-                      {order.items.length > 3 && (
-                        <span className="text-sm bg-muted px-3 py-1 rounded-full">
-                          +{order.items.length - 3} more
-                        </span>
-                      )}
-                    </div>
+                    <p className="font-bold">₹{order.total_amount.toFixed(2)}</p>
                   </div>
                 </motion.div>
               );

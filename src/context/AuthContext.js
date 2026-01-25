@@ -12,10 +12,11 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   // --------------------------------------------------
-  // Restore auth on page refresh
+  // Restore auth on page refresh (FIXED)
   // --------------------------------------------------
   useEffect(() => {
     const storedToken = localStorage.getItem("token");
+    const storedUser = localStorage.getItem("user");
 
     if (!storedToken) {
       setLoading(false);
@@ -24,6 +25,12 @@ export const AuthProvider = ({ children }) => {
 
     setToken(storedToken);
 
+    // ✅ Instant restore (no logout, no flicker)
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+
+    // 🔁 Background validation
     axios
       .get(`${API}/auth/me`, {
         headers: {
@@ -32,9 +39,13 @@ export const AuthProvider = ({ children }) => {
       })
       .then((res) => {
         setUser(res.data);
+        localStorage.setItem("user", JSON.stringify(res.data));
       })
-      .catch(() => {
-        logout();
+      .catch((err) => {
+        // ❗ Logout ONLY if token is invalid
+        if (err.response?.status === 401) {
+          logout();
+        }
       })
       .finally(() => {
         setLoading(false);
@@ -51,7 +62,6 @@ export const AuthProvider = ({ children }) => {
     });
 
     const token = res.data.token;
-
     localStorage.setItem("token", token);
     setToken(token);
 
@@ -62,10 +72,11 @@ export const AuthProvider = ({ children }) => {
     });
 
     setUser(me.data);
+    localStorage.setItem("user", JSON.stringify(me.data));
   };
 
   // --------------------------------------------------
-  // SIGNUP  ✅ (THIS WAS MISSING)
+  // SIGNUP
   // --------------------------------------------------
   const signup = async (name, email, password) => {
     await axios.post(`${API}/auth/signup`, {
@@ -80,6 +91,7 @@ export const AuthProvider = ({ children }) => {
   // --------------------------------------------------
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setToken(null);
     setUser(null);
   };
