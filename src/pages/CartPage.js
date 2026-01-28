@@ -1,3 +1,4 @@
+// CartPage.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -13,12 +14,12 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 export const CartPage = () => {
-  const { cart, updateQuantity, removeFromCart, getTotal, clearCart } = useCart();
+  const { cart, updateQuantity, removeFromCart, getTotal, clearCart } =
+    useCart();
   const { user, token } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
-  // ---------------- CHECKOUT ----------------
   const handleCheckout = async () => {
     if (!user) {
       toast.error("Please sign in to place an order");
@@ -32,12 +33,12 @@ export const CartPage = () => {
       // 1️⃣ Create Razorpay order
       const { data: order } = await axios.post(
         `${API}/payments/create-order`,
-        { amount: getTotal() }, // USD amount
+        { amount: getTotal() },
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       // 2️⃣ Open Razorpay
@@ -63,7 +64,7 @@ export const CartPage = () => {
                 headers: {
                   Authorization: `Bearer ${token}`,
                 },
-              }
+              },
             );
 
             // 4️⃣ Create order in DB
@@ -82,7 +83,7 @@ export const CartPage = () => {
                 headers: {
                   Authorization: `Bearer ${token}`,
                 },
-              }
+              },
             );
 
             clearCart();
@@ -109,70 +110,99 @@ export const CartPage = () => {
     }
   };
 
-  // ---------------- EMPTY CART ----------------
   if (cart.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center pt-24">
+      <div className="min-h-screen flex items-center justify-center pt-24 px-4">
         <div className="text-center">
-          <ShoppingBag className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Your cart is empty</h2>
+          <ShoppingBag className="w-12 h-12 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Your cart is empty</h2>
           <Button onClick={() => navigate("/menu")}>Browse Menu</Button>
         </div>
       </div>
     );
   }
 
-  // ---------------- UI ----------------
   return (
-    <div className="min-h-screen pt-24 px-6">
+    <div className="min-h-screen pt-24 px-4 sm:px-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8">Your Cart</h1>
+        <h1 className="text-2xl sm:text-4xl font-bold mb-6">Your Cart</h1>
 
-        <div className="space-y-4 mb-8">
+        <div className="space-y-4 mb-6">
           {cart.map((item) => (
             <motion.div
               key={item.id}
-              className="bg-white p-6 rounded-2xl flex gap-6"
+              className="bg-white rounded-2xl p-4 sm:p-6"
             >
-              <img
-                src={item.image_url}
-                alt={item.name}
-                className="w-24 h-24 rounded-xl object-cover"
-              />
+              {/* MOBILE LAYOUT */}
+              <div className="flex sm:hidden gap-4">
+                <img
+                  src={item.image_url}
+                  alt={item.name}
+                  className="w-16 h-16 rounded-xl object-cover"
+                />
 
-              <div className="flex-1">
-                <h3 className="font-semibold">{item.name}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {item.category}
-                </p>
-                <p className="font-bold text-lg">₹{item.price.toFixed(2)}</p>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-sm">{item.name}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {item.category}
+                  </p>
+                  <p className="font-bold text-sm mt-1">
+                    ₹{item.price.toFixed(2)}
+                  </p>
+                </div>
               </div>
 
-              <div className="flex flex-col items-end justify-between">
+              {/* DESKTOP LAYOUT (UNCHANGED) */}
+              <div className="hidden sm:flex gap-6">
+                <img
+                  src={item.image_url}
+                  alt={item.name}
+                  className="w-24 h-24 rounded-xl object-cover"
+                />
+
+                <div className="flex-1">
+                  <h3 className="font-semibold">{item.name}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {item.category}
+                  </p>
+                  <p className="font-bold text-lg">₹{item.price.toFixed(2)}</p>
+                </div>
+
                 <Button
+                  size="icon"
                   variant="ghost"
                   onClick={() => removeFromCart(item.id)}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 size={16} />
+                </Button>
+              </div>
+
+              {/* QUANTITY + ACTIONS */}
+              <div className="mt-4 flex justify-between items-center sm:justify-end sm:gap-4">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="sm:hidden"
+                  onClick={() => removeFromCart(item.id)}
+                >
+                  <Trash2 size={16} />
                 </Button>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <Button
                     size="icon"
-                    onClick={() =>
-                      updateQuantity(item.id, item.quantity - 1)
-                    }
+                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
                   >
                     <Minus size={14} />
                   </Button>
 
-                  <span>{item.quantity}</span>
+                  <span className="text-sm w-4 text-center">
+                    {item.quantity}
+                  </span>
 
                   <Button
                     size="icon"
-                    onClick={() =>
-                      updateQuantity(item.id, item.quantity + 1)
-                    }
+                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
                   >
                     <Plus size={14} />
                   </Button>
@@ -182,18 +212,18 @@ export const CartPage = () => {
           ))}
         </div>
 
-        <div className="bg-muted/30 p-8 rounded-2xl">
-          <div className="flex justify-between mb-6">
-            <span className="text-lg">Subtotal</span>
-            <span className="text-2xl font-bold">
-              ₹ {getTotal().toFixed(2)}
+        <div className="bg-muted/30 p-4 sm:p-8 rounded-2xl">
+          <div className="flex justify-between mb-4">
+            <span className="text-sm sm:text-lg">Subtotal</span>
+            <span className="text-lg sm:text-2xl font-bold">
+              ₹{getTotal().toFixed(2)}
             </span>
           </div>
 
           <Button
             onClick={handleCheckout}
             disabled={loading}
-            className="w-full h-14 text-lg"
+            className="w-full h-12 sm:h-14 text-base sm:text-lg"
           >
             {loading ? "Processing..." : "Checkout"}
           </Button>
