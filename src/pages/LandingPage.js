@@ -1,9 +1,8 @@
-import React from "react";
+import React, { useRef } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Coffee, Clock, Award, Heart } from "lucide-react";
 import { Button } from "../components/ui/button";
-const isDesktop = () => window.innerWidth >= 768;
 
 export const LandingPage = () => {
   const navigate = useNavigate();
@@ -50,210 +49,177 @@ export const LandingPage = () => {
 
   return (
     <div className="min-h-screen">
-      {/* ---------------- HERO ---------------- */}
-      <section className="relative min-h-[100vh] md:h-screen flex items-center justify-center overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{
-            backgroundImage:
-              "url(https://images.pexels.com/photos/35340703/pexels-photo-35340703.jpeg)",
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/40 to-primary/80" />
 
-        <div className="relative z-10 text-center px-4 sm:px-6 max-w-4xl">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-          >
-            <h1 className="text-3xl sm:text-4xl md:text-7xl font-heading font-bold text-white mb-4 md:mb-6 leading-tight">
-              Where Every Sip
-              <br />
-              Tells a Story
+      {/* ================= HERO ================= */}
+      <section className="relative min-h-screen px-6 md:px-16 flex items-center overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-7xl mt-8 md:my-auto mx-auto w-full">
+
+          {/* HERO IMAGE */}
+          <div className="order-1 md:order-2 flex justify-center">
+            <CoffeeScroller />
+          </div>
+
+          {/* TEXT CONTENT */}
+          <div className="order-2 md:order-1 flex flex-col justify-center z-10">
+            <h1 className="font-heading font-extrabold leading-[1.05] text-primary">
+              <div className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl">
+                IT’S A BREAK
+              </div>
+              <div className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl">
+                WITH <span className="text-accent">COFFEE</span>
+              </div>
             </h1>
 
-            <p className="text-sm sm:text-base md:text-xl text-white/90 mb-6 md:mb-8 max-w-2xl mx-auto">
-              Discover handcrafted coffee and freshly baked pastries in a warm,
-              inviting atmosphere.
+            <p className="mt:3 md:mt-6 max-w-md text-muted-foreground text-sm sm:text-base md:text-lg">
+              Indulge in the rich aroma of freshly brewed coffee. A sensory
+              delight for true coffee lovers.
             </p>
 
-            <div className="flex gap-3 sm:gap-4 justify-center flex-wrap">
+            <div className="flex gap-2 mt-4 md:mt-8 flex-wrap">
               <Button
                 onClick={() => navigate("/menu")}
-                className="bg-white text-primary h-10 sm:h-12 px-6 sm:px-8 rounded-full text-sm sm:text-base hover:scale-105"
+                className="rounded-full px-4 md:px-8 h-8 md:h-12 bg-primary text-primary-foreground"
               >
                 Order Now
               </Button>
-
               <Button
                 onClick={() => navigate("/menu")}
-                className="border-2 border-white text-white bg-transparent h-10 sm:h-12 px-6 sm:px-8 rounded-full text-sm sm:text-base"
+                variant="outline"
+                className="rounded-full px-4 md:px-8 h-8 md:h-12"
               >
                 View Menu
               </Button>
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
 
-      {/* ---------------- FEATURES ---------------- */}
-      <section className="py-14 sm:py-20 md:py-32 px-4 sm:px-6 md:px-12">
+      {/* ================= FEATURES ================= */}
+      <section className="py-16 md:py-32 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-10 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-5xl font-heading font-semibold text-primary mb-3">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-5xl font-heading font-semibold text-primary">
               Why Choose CoCoa?
             </h2>
-            <p className="text-sm sm:text-lg text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-muted-foreground mt-2">
               We're passionate about delivering exceptional coffee experiences
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {[
-              {
-                icon: Coffee,
-                title: "Premium Beans",
-                desc: "Ethically sourced from the finest coffee regions",
-              },
-              {
-                icon: Clock,
-                title: "Quick Service",
-                desc: "Order ahead and skip the line",
-              },
-              {
-                icon: Award,
-                title: "Award Winning",
-                desc: "Recognized for excellence in craft coffee",
-              },
-              {
-                icon: Heart,
-                title: "Made with Love",
-                desc: "Every cup is crafted with care and passion",
-              },
-            ].map((feature, idx) => (
+              { icon: Coffee, title: "Premium Beans", desc: "Ethically sourced from the finest regions" },
+              { icon: Clock, title: "Quick Service", desc: "Order ahead and skip the line" },
+              { icon: Award, title: "Award Winning", desc: "Recognized for excellence" },
+              { icon: Heart, title: "Made with Love", desc: "Every cup crafted with care" },
+            ].map((f, i) => (
               <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 20 }}
+                key={i}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="p-6 md:p-8 rounded-3xl bg-muted/50 text-center"
-              >
-                <div className="w-14 h-14 md:w-16 md:h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <feature.icon className="w-6 h-6 md:w-8 md:h-8 text-primary" />
-                </div>
-                <h3 className="text-base md:text-xl font-heading font-medium text-primary mb-1">
-                  {feature.title}
-                </h3>
-                <p className="text-sm text-muted-foreground">{feature.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------- GALLERY ---------------- */}
-      <section className="py-14 sm:py-20 md:py-32 px-4 sm:px-6 md:px-12 bg-muted/30">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-10 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-5xl font-heading font-semibold text-primary mb-3">
-              Gallery
-            </h2>
-            <p className="text-sm sm:text-lg text-muted-foreground">
-              A glimpse into our cozy café
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {galleryImages.map((img, idx) => (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, scale: 0.9 }}
-                {...(isDesktop()
-                  ? {
-                      whileInView: { opacity: 1, scale: 1 },
-                      viewport: { once: true },
-                      transition: { delay: idx * 0.1, duration: 0.5 },
-                    }
-                  : {
-                      animate: { opacity: 1, scale: 1 },
-                      transition: { delay: idx * 0.05, duration: 0.3 },
-                    })}
-                whileHover={{ y: -5 }}
-                className="relative h-36 sm:h-48 md:h-64 rounded-2xl overflow-hidden shadow-lg"
-              >
-                <img
-                  src={img.url}
-                  alt={img.alt}
-                  className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                />
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------- TESTIMONIALS ---------------- */}
-      <section className="py-14 sm:py-20 md:py-32 px-4 sm:px-6 md:px-12">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-10 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-5xl font-heading font-semibold text-primary mb-3">
-              What Our Customers Say
-            </h2>
-            <p className="text-sm sm:text-lg text-muted-foreground">
-              Don't just take our word for it
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-            {testimonials.map((t, idx) => (
-              <motion.div
-                key={idx}
                 initial={{ opacity: 0, y: 20 }}
-                {...(isDesktop()
-                  ? {
-                      whileInView: { opacity: 1, y: 0 },
-                      viewport: { once: true },
-                      transition: { delay: idx * 0.1, duration: 0.5 },
-                    }
-                  : {
-                      animate: { opacity: 1, y: 0 },
-                      transition: { delay: idx * 0.05, duration: 0.3 },
-                    })}
-                className="p-6 md:p-8 rounded-2xl bg-white border border-border/50 shadow-md"
+                viewport={{ once: true }}
+                className="bg-muted/50 p-8 rounded-3xl text-center"
               >
-                <div className="flex gap-1 mb-3">
-                  {[...Array(t.rating)].map((_, i) => (
-                    <span key={i} className="text-accent text-lg">
-                      ★
-                    </span>
-                  ))}
+                <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-2xl flex items-center justify-center">
+                  <f.icon className="w-8 h-8 text-primary" />
                 </div>
-                <p className="text-sm md:text-base mb-3">"{t.comment}"</p>
+                <h3 className="font-heading text-lg text-primary">{f.title}</h3>
+                <p className="text-muted-foreground text-sm mt-1">{f.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ================= GALLERY ================= */}
+      <section className="py-16 md:py-32 px-6 bg-muted/30">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-center text-3xl md:text-5xl font-heading text-primary mb-12">
+            Gallery
+          </h2>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {galleryImages.map((img, i) => (
+              <motion.div
+                key={i}
+                whileInView={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                viewport={{ once: true }}
+                className="h-40 md:h-64 rounded-2xl overflow-hidden shadow-lg"
+              >
+                <img src={img.url} alt={img.alt} className="w-full h-full object-cover" />
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ================= TESTIMONIALS ================= */}
+      <section className="py-16 md:py-32 px-6">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-center text-3xl md:text-5xl font-heading text-primary mb-12">
+            What Our Customers Say
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {testimonials.map((t, i) => (
+              <motion.div
+                key={i}
+                whileInView={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, y: 20 }}
+                viewport={{ once: true }}
+                className="bg-white p-6 rounded-2xl shadow-md"
+              >
+                <div className="text-accent mb-2">★★★★★</div>
+                <p className="text-sm mb-3">"{t.comment}"</p>
                 <p className="font-medium text-primary">{t.name}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
+    </div>
+  );
+};
 
-      {/* ---------------- CTA ---------------- */}
-      <section className="py-14 sm:py-20 px-4 sm:px-6 md:px-12 bg-primary text-primary-foreground">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-2xl sm:text-3xl md:text-5xl font-heading font-semibold mb-4">
-            Ready to Experience CoCoa?
-          </h2>
-          <p className="text-sm sm:text-lg mb-6 opacity-90">
-            Visit us today or order online for pickup
-          </p>
-          <Button
-            onClick={() => navigate("/menu")}
-            className="bg-white text-primary h-10 sm:h-12 px-6 sm:px-8 rounded-full text-sm sm:text-base hover:scale-105"
-          >
-            Start Your Order
-          </Button>
-        </div>
-      </section>
+/* ================= COFFEE IMAGE + BEANS ================= */
+
+const CoffeeScroller = () => {
+  const beans = [...Array(8)].map((_, i) => ({
+    id: i,
+    size: Math.random() * 14 + 26,
+    top: Math.random() * 70 + 5,
+    left: Math.random() * 70 + 5,
+    rotate: Math.random() * 360,
+    duration: Math.random() * 4 + 6,
+  }));
+
+  return (
+    <div className="relative h-[280px] sm:h-[360px] md:h-[520px] flex items-center justify-center">
+      {beans.map((b) => (
+        <motion.img
+          key={b.id}
+          src="/coffee-bean.png"
+          drag
+          className="absolute z-40 cursor-grab"
+          style={{
+            width: b.size,
+            top: `${b.top}%`,
+            left: `${b.left}%`,
+            rotate: b.rotate,
+          }}
+          animate={{ y: [0, -16, 0] }}
+          transition={{ duration: b.duration, repeat: Infinity }}
+        />
+      ))}
+
+      <img
+        src="/hero.png"
+        alt="Coffee Splash"
+        className="w-[200px] sm:w-[300px] md:w-[400px] lg:w-[400px] z-20"
+      />
+
+      <div className="absolute w-72 h-72 md:w-96 md:h-96 bg-accent/20 blur-3xl rounded-full -z-10" />
     </div>
   );
 };

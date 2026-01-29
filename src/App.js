@@ -12,6 +12,7 @@ import { SignupPage } from './pages/SignupPage';
 import { UserDashboard } from './pages/UserDashboard';
 import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { AdminDashboard } from './pages/AdminDashboard';
+import Footer from "./components/Footer";
 import './App.css';
 
 function App() {
@@ -32,7 +33,9 @@ function App() {
               <Route path="/admin" element={<AdminDashboard />} />
             </Routes>
             <Toaster position="top-center" richColors />
+            <Footer />
           </div>
+          
         </BrowserRouter>
       </CartProvider>
     </AuthProvider>
