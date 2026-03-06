@@ -13,6 +13,7 @@ import { UserDashboard } from './pages/UserDashboard';
 import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import Footer from "./components/Footer";
+import { OrderNotifier } from './components/OrderNotifier';
 import './App.css';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
       <CartProvider>
         <BrowserRouter>
           <div className="App min-h-screen bg-background">
+            <OrderNotifier />
             <Navbar />
             <Routes>
               <Route path="/" element={<LandingPage />} />
