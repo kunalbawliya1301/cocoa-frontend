@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useCart } from "../context/CartContext";
 import { Button } from "../components/ui/button";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import axios from "axios";
 import { Search, Filter } from "lucide-react";
 import { Input } from "../components/ui/input";
+import { API } from "../lib/api";
 import {
   Select,
   SelectContent,
@@ -13,9 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 export const MenuPage = () => {
   const [menuItems, setMenuItems] = useState([]);
@@ -26,16 +24,7 @@ export const MenuPage = () => {
   const [loading, setLoading] = useState(true);
   const { addToCart } = useCart();
 
-  useEffect(() => {
-    fetchMenu();
-    fetchCategories();
-  }, []);
-
-  useEffect(() => {
-    filterItems();
-  }, [menuItems, selectedCategory, searchQuery]);
-
-  const fetchMenu = async () => {
+  const fetchMenu = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/menu/items`);
       setMenuItems(response.data);
@@ -44,18 +33,18 @@ export const MenuPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/menu/categories`);
       setCategories(response.data.categories);
     } catch {
       console.error("Failed to load categories");
     }
-  };
+  }, []);
 
-  const filterItems = () => {
+  const filterItems = useCallback(() => {
     let filtered = menuItems;
 
     if (selectedCategory !== "all") {
@@ -71,7 +60,16 @@ export const MenuPage = () => {
     }
 
     setFilteredItems(filtered);
-  };
+  }, [menuItems, searchQuery, selectedCategory]);
+
+  useEffect(() => {
+    fetchMenu();
+    fetchCategories();
+  }, [fetchMenu, fetchCategories]);
+
+  useEffect(() => {
+    filterItems();
+  }, [filterItems]);
 
   const handleAddToCart = (item) => {
     addToCart(item);

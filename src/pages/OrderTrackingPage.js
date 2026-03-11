@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -6,9 +6,7 @@ import { Button } from '../components/ui/button';
 import { Clock, CheckCircle, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { API } from '../lib/api';
 
 const statusConfig = {
   pending: { icon: Clock, label: 'Order Received', color: 'text-yellow-600', bg: 'bg-yellow-50' },
@@ -29,7 +27,7 @@ export const OrderTrackingPage = () => {
   const pollingRef = useRef(null);
 
   // ---------------- FETCH ORDER ----------------
-  const fetchOrder = async (silent = false) => {
+  const fetchOrder = useCallback(async (silent = false) => {
     try {
       const res = await axios.get(`${API}/orders/${orderId}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -40,7 +38,7 @@ export const OrderTrackingPage = () => {
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, [orderId, token]);
 
   // ---------------- AUTH GUARD + POLLING ----------------
   useEffect(() => {
@@ -60,7 +58,7 @@ export const OrderTrackingPage = () => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [orderId, user, token, authLoading]);
+  }, [authLoading, fetchOrder, navigate, token, user]);
 
   // ---------------- LOADING ----------------
   if (authLoading || loading) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -28,9 +28,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Plus, Pencil, Trash2, Package } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { API } from "../lib/api";
 
 /* ---------------- DATE + TIME (IST SAFE) ---------------- */
 const formatDateTime = (order) => {
@@ -55,7 +53,7 @@ const formatDateTime = (order) => {
 /* ------------------------------------------------------- */
 
 export const AdminDashboard = () => {
-  const { user, token, loading: authLoading } = useAuth();
+  const { user, token, logout, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const intervalRef = useRef(null);
 
@@ -78,18 +76,18 @@ export const AdminDashboard = () => {
   });
 
   /* ---------------- AUTH ---------------- */
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user || user.role !== "admin") return navigate("/");
-
-    fetchData();
-    intervalRef.current = setInterval(fetchOrdersOnly, 5000);
-
-    return () => clearInterval(intervalRef.current);
-  }, [user, authLoading, navigate]);
+  const handleUnauthorized = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    logout();
+    toast.error("Admin session expired. Please login again.");
+    navigate("/login", { replace: true });
+  }, [logout, navigate]);
 
   /* ---------------- FETCH ---------------- */
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [menuRes, orderRes] = await Promise.all([
         axios.get(`${API}/menu/items`),
@@ -100,23 +98,52 @@ export const AdminDashboard = () => {
 
       setMenuItems(menuRes.data);
       setOrders(orderRes.data);
-    } catch {
+    } catch (err) {
+      if (err.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
       toast.error("Failed to load admin data");
     } finally {
       setLoading(false);
     }
-  };
+  }, [handleUnauthorized, token]);
 
-  const fetchOrdersOnly = async () => {
+  const fetchOrdersOnly = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/admin/orders`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setOrders(res.data);
-    } catch {
+    } catch (err) {
+      if (err.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
       console.error("Order polling failed");
     }
-  };
+  }, [handleUnauthorized, token]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user || user.role !== "admin") {
+      navigate("/");
+      return;
+    }
+    if (!token) {
+      handleUnauthorized();
+      return;
+    }
+
+    fetchData();
+    intervalRef.current = setInterval(fetchOrdersOnly, 5000);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [authLoading, fetchData, fetchOrdersOnly, handleUnauthorized, navigate, token, user]);
 
   /* ---------------- MENU CRUD ---------------- */
   const handleSubmit = async (e) => {

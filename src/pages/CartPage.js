@@ -5,13 +5,11 @@ import { motion } from "framer-motion";
 import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
+import { API } from "../lib/api";
 
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 export const CartPage = () => {
   const { cart, updateQuantity, removeFromCart, getTotal, clearCart } =
@@ -33,7 +31,12 @@ export const CartPage = () => {
       // 1️⃣ Create Razorpay order
       const { data: order } = await axios.post(
         `${API}/payments/create-order`,
-        { amount: getTotal() },
+        {
+          items: cart.map((item) => ({
+            menu_item_id: item.id,
+            quantity: item.quantity,
+          })),
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -73,11 +76,8 @@ export const CartPage = () => {
               {
                 items: cart.map((item) => ({
                   menu_item_id: item.id,
-                  name: item.name,
-                  price: item.price,
                   quantity: item.quantity,
                 })),
-                total_amount: getTotal(),
               },
               {
                 headers: {

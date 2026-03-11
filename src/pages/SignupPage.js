@@ -44,7 +44,7 @@ export const SignupPage = () => {
     try {
       await signup(name, email, password);
       toast.success('Account created!');
-      navigate('/menu');
+      navigate('/dashboard');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Signup failed');
     } finally {

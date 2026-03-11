@@ -56,7 +56,7 @@ export const LoginPage = () => {
       toast.success('Welcome back!');
       navigate('/menu');
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Invalid credentials');
+      toast.error(err.response?.data?.detail || err.message || 'Invalid credentials');
     } finally {
       setLoading(false);
     }

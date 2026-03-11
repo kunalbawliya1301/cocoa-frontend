@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -6,9 +6,7 @@ import { Clock, Package, CheckCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import axios from 'axios';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { API } from '../lib/api';
 
 const statusConfig = {
   pending: { icon: Clock, label: 'Pending', color: 'text-yellow-600', bg: 'bg-yellow-50' },
@@ -55,7 +53,7 @@ export const UserDashboard = () => {
   const [loading, setLoading] = useState(true);
   const pollingRef = useRef(null);
 
-  const fetchOrders = async (silent = false) => {
+  const fetchOrders = useCallback(async (silent = false) => {
     try {
       const res = await axios.get(`${API}/orders/my`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -66,7 +64,7 @@ export const UserDashboard = () => {
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -83,7 +81,7 @@ export const UserDashboard = () => {
     }, 10000);
 
     return () => clearInterval(pollingRef.current);
-  }, [user, token, authLoading, navigate]);
+  }, [authLoading, fetchOrders, navigate, token, user]);
 
   if (authLoading || loading) {
     return (
