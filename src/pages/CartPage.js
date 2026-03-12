@@ -12,7 +12,7 @@ import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
 
 export const CartPage = () => {
-  const { cart, updateQuantity, removeFromCart, getTotal, clearCart } =
+  const { cart, updateQuantity, removeFromCart, getTotal, clearCart, tableNumber } =
     useCart();
   const { user, token } = useAuth();
   const navigate = useNavigate();
@@ -78,6 +78,7 @@ export const CartPage = () => {
                   menu_item_id: item.id,
                   quantity: item.quantity,
                 })),
+                ...(tableNumber ? { table_number: tableNumber } : {}),
               },
               {
                 headers: {

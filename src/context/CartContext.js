@@ -4,6 +4,7 @@ const CartContext = createContext(null);
 
 export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
+  const [tableNumber, setTableNumber] = useState(null);
 
   useEffect(() => {
     const savedCart = localStorage.getItem('cart');
@@ -64,6 +65,8 @@ export const CartProvider = ({ children }) => {
         clearCart,
         getTotal,
         getItemCount,
+        tableNumber,
+        setTableNumber,
       }}
     >
       {children}

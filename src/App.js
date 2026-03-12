@@ -12,6 +12,7 @@ import { SignupPage } from './pages/SignupPage';
 import { UserDashboard } from './pages/UserDashboard';
 import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { QRCodePage } from './pages/QRCodePage';
 import Footer from "./components/Footer";
 import { OrderNotifier } from './components/OrderNotifier';
 import './App.css';
@@ -33,6 +34,7 @@ function App() {
               <Route path="/dashboard" element={<UserDashboard />} />
               <Route path="/order/:orderId" element={<OrderTrackingPage />} />
               <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/qr-codes" element={<QRCodePage />} />
             </Routes>
             <Toaster position="top-center" richColors />
             <Footer />
