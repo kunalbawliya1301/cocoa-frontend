@@ -14,5 +14,13 @@ export const ORDER_WS_URL = BACKEND_URL.replace(/^http/i, "ws") + "/api/ws/order
 
 export const apiClient = axios.create({
   baseURL: API,
-  withCredentials: true,
+});
+
+apiClient.interceptors.request.use((config) => {
+  const token = window.localStorage.getItem("token");
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });

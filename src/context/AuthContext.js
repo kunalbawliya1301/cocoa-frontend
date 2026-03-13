@@ -6,114 +6,125 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(() => window.localStorage.getItem("token"));
   const [loading, setLoading] = useState(true);
 
   const clearSession = useCallback(() => {
+    window.localStorage.removeItem("token");
+    window.localStorage.removeItem("user");
+    setToken(null);
     setUser(null);
   }, []);
 
-  const clearServerSession = useCallback(async () => {
-    try {
-      await apiClient.post("/auth/logout");
-    } catch {
-      // Best-effort cleanup for stale or invalid cookies.
-    }
-  }, []);
-
   const validateSession = useCallback(
-    async ({ logoutOn401 = true, cleanupInvalidCookie = false } = {}) => {
+    async ({ logoutOn401 = true } = {}) => {
+      if (!window.localStorage.getItem("token")) {
+        if (logoutOn401) {
+          clearSession();
+        }
+        return false;
+      }
+
       try {
         const res = await apiClient.get("/auth/me");
         setUser(res.data);
+        window.localStorage.setItem("user", JSON.stringify(res.data));
         return true;
       } catch (err) {
         if (logoutOn401 && (err.response?.status === 401 || err.response?.status === 403)) {
           clearSession();
         }
-        if (cleanupInvalidCookie && (err.response?.status === 401 || err.response?.status === 403)) {
-          await clearServerSession();
-        }
         return false;
       }
     },
-    [clearServerSession, clearSession],
+    [clearSession],
   );
 
   useEffect(() => {
-    validateSession({ logoutOn401: false, cleanupInvalidCookie: true }).finally(() => {
+    const storedUser = window.localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
+        window.localStorage.removeItem("user");
+      }
+    }
+
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    validateSession({ logoutOn401: true }).finally(() => {
       setLoading(false);
     });
-  }, [validateSession]);
+  }, [token, validateSession]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!token) return;
 
     const intervalId = setInterval(() => {
       validateSession();
     }, 10 * 60 * 1000);
 
     return () => clearInterval(intervalId);
-  }, [user, validateSession]);
+  }, [token, validateSession]);
 
   const login = async (email, password) => {
-    try {
-      await apiClient.post("/auth/login", {
-        email,
-        password,
-      });
-    } catch (err) {
-      if (err.response?.status === 401 || err.response?.status === 403) {
-        await clearServerSession();
-        clearSession();
-      }
-      throw err;
+    const res = await apiClient.post("/auth/login", {
+      email,
+      password,
+    });
+
+    const nextToken = res.data?.token;
+    if (!nextToken) {
+      throw new Error("Login succeeded but token was missing");
     }
 
-    const isValid = await validateSession({ logoutOn401: false, cleanupInvalidCookie: true });
+    window.localStorage.setItem("token", nextToken);
+    setToken(nextToken);
+
+    const isValid = await validateSession({ logoutOn401: false });
     if (!isValid) {
-      await clearServerSession();
       clearSession();
       throw new Error("Session validation failed");
     }
   };
 
   const signup = async (name, email, password) => {
-    try {
-      await apiClient.post("/auth/signup", {
-        name,
-        email,
-        password,
-      });
-    } catch (err) {
-      if (err.response?.status === 401 || err.response?.status === 403) {
-        await clearServerSession();
-        clearSession();
-      }
-      throw err;
+    const res = await apiClient.post("/auth/signup", {
+      name,
+      email,
+      password,
+    });
+
+    const nextToken = res.data?.token;
+    const nextUser = res.data?.user;
+    if (!nextToken || !nextUser) {
+      throw new Error("Signup succeeded but auth payload was missing");
     }
 
-    const isValid = await validateSession({ logoutOn401: false, cleanupInvalidCookie: true });
-    if (!isValid) {
-      await clearServerSession();
-      clearSession();
-      throw new Error("Session validation failed");
-    }
+    window.localStorage.setItem("token", nextToken);
+    window.localStorage.setItem("user", JSON.stringify(nextUser));
+    setToken(nextToken);
+    setUser(nextUser);
   };
 
   const logout = useCallback(async () => {
     try {
-      await clearServerSession();
+      await apiClient.post("/auth/logout");
     } catch {
-      // Clear local auth state even if the server cookie was already missing.
+      // Best-effort cookie cleanup only.
     } finally {
       clearSession();
     }
-  }, [clearServerSession, clearSession]);
+  }, [clearSession]);
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        token,
         login,
         signup,
         logout,

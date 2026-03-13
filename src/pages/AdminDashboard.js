@@ -245,7 +245,7 @@ const AnalyticsTab = ({ orders, menuItems, analytics }) => {
 
 /* ── Main Component ──────────────────────────────── */
 export const AdminDashboard = () => {
-  const { user, logout, loading: authLoading } = useAuth();
+  const { user, token, logout, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const intervalRef = useRef(null);
   const wsRef = useRef(null);
@@ -401,11 +401,11 @@ export const AdminDashboard = () => {
   }, []);
 
   useEffect(() => {
-    if (authLoading || !user || user.role !== "admin") {
+    if (authLoading || !user || user.role !== "admin" || !token) {
       return undefined;
     }
 
-    wsRef.current = new WebSocket(ORDER_WS_URL);
+    wsRef.current = new WebSocket(`${ORDER_WS_URL}/${token}`);
 
     wsRef.current.onmessage = (event) => {
       try {
@@ -450,7 +450,7 @@ export const AdminDashboard = () => {
         wsRef.current = null;
       }
     };
-  }, [authLoading, playNotificationSound, user]);
+  }, [authLoading, playNotificationSound, token, user]);
 
   /* ── Menu CRUD ────────────────────────── */
   const handleSubmit = async (e) => {
