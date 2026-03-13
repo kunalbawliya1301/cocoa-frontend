@@ -409,7 +409,15 @@ export const AdminDashboard = () => {
 
     wsRef.current.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
+        if (typeof event.data !== "string") {
+          return;
+        }
+        const trimmed = event.data.trim();
+        if (!trimmed || trimmed === "pong" || !/^[{\[]/.test(trimmed)) {
+          return;
+        }
+
+        const data = JSON.parse(trimmed);
         if (data.type !== "new_order" || !data.order) {
           return;
         }
@@ -434,10 +442,12 @@ export const AdminDashboard = () => {
           });
         }
       } catch (error) {
-        if (event.data !== "pong") {
-          console.error("Failed to process admin order event", error);
-        }
+        console.error("Failed to process admin order event", error, event.data);
       }
+    };
+
+    wsRef.current.onerror = (error) => {
+      console.error("Admin order WebSocket error", error);
     };
 
     wsRef.current.onclose = () => {
