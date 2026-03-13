@@ -3,9 +3,8 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
-import axios from "axios";
 import { toast } from "sonner";
-import { API } from "../lib/api";
+import { apiClient } from "../lib/api";
 
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -14,7 +13,7 @@ import { Button } from "../components/ui/button";
 export const CartPage = () => {
   const { cart, updateQuantity, removeFromCart, getTotal, clearCart, tableNumber } =
     useCart();
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
@@ -29,18 +28,13 @@ export const CartPage = () => {
       setLoading(true);
 
       // 1️⃣ Create Razorpay order
-      const { data: order } = await axios.post(
-        `${API}/payments/create-order`,
+      const { data: order } = await apiClient.post(
+        "/payments/create-order",
         {
           items: cart.map((item) => ({
             menu_item_id: item.id,
             quantity: item.quantity,
           })),
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
         },
       );
 
@@ -56,34 +50,24 @@ export const CartPage = () => {
         handler: async function (response) {
           try {
             // 3️⃣ Verify payment
-            await axios.post(
-              `${API}/payments/verify`,
+            await apiClient.post(
+              "/payments/verify",
               {
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
               },
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              },
             );
 
             // 4️⃣ Create order in DB
-            await axios.post(
-              `${API}/orders`,
+            await apiClient.post(
+              "/orders",
               {
                 items: cart.map((item) => ({
                   menu_item_id: item.id,
                   quantity: item.quantity,
                 })),
                 ...(tableNumber ? { table_number: tableNumber } : {}),
-              },
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
               },
             );
 

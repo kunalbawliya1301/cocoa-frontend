@@ -5,8 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Clock, CheckCircle, Package } from 'lucide-react';
 import { toast } from 'sonner';
-import axios from 'axios';
-import { API } from '../lib/api';
+import { apiClient } from '../lib/api';
 
 const statusConfig = {
   pending: { icon: Clock, label: 'Order Received', color: 'text-yellow-600', bg: 'bg-yellow-50' },
@@ -19,7 +18,7 @@ export const OrderTrackingPage = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
 
-  const { user, token, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29,22 +28,20 @@ export const OrderTrackingPage = () => {
   // ---------------- FETCH ORDER ----------------
   const fetchOrder = useCallback(async (silent = false) => {
     try {
-      const res = await axios.get(`${API}/orders/${orderId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiClient.get(`/orders/${orderId}`);
       setOrder(res.data);
     } catch (err) {
       if (!silent) toast.error('Failed to load order');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [orderId, token]);
+  }, [orderId]);
 
   // ---------------- AUTH GUARD + POLLING ----------------
   useEffect(() => {
     if (authLoading) return; // ⛔ wait for auth restore
 
-    if (!user || !token) {
+    if (!user) {
       navigate('/login');
       return;
     }
@@ -58,7 +55,7 @@ export const OrderTrackingPage = () => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [authLoading, fetchOrder, navigate, token, user]);
+  }, [authLoading, fetchOrder, navigate, user]);
 
   // ---------------- LOADING ----------------
   if (authLoading || loading) {

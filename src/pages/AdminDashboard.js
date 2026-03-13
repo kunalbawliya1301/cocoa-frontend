@@ -24,11 +24,11 @@ import {
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { Switch } from "../components/ui/switch";
 import { Textarea } from "../components/ui/textarea";
-import { Plus, Pencil, Trash2, Package, QrCode, TrendingUp, ShoppingCart, IndianRupee, Clock } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, QrCode, TrendingUp, ShoppingCart, IndianRupee, Clock, CalendarDays, WalletCards } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
-import { API } from "../lib/api";
+import { apiClient, ORDER_WS_URL } from "../lib/api";
 import {
   BarChart,
   Bar,
@@ -47,10 +47,14 @@ import {
 const formatDateTime = (order) => {
   const raw = order.createdAt || order.created_at || order.date;
   if (!raw) return "Date unavailable";
-  const date =
-    typeof raw === "string" && !raw.includes("Z")
-      ? new Date(raw + "Z")
-      : new Date(raw);
+  const normalizedRaw =
+    typeof raw === "string" && !/[zZ]|[+-]\d{2}:\d{2}$/.test(raw)
+      ? `${raw}Z`
+      : raw;
+  const date = new Date(normalizedRaw);
+  if (Number.isNaN(date.getTime())) {
+    return "Date unavailable";
+  }
   return new Intl.DateTimeFormat("en-IN", {
     timeZone: "Asia/Kolkata",
     day: "numeric",
@@ -64,6 +68,11 @@ const formatDateTime = (order) => {
 
 /* ── Analytics helpers ───────────────────────────── */
 const PIE_COLORS = ["#4A3728", "#C05621", "#D4C5B0", "#8B5A2B", "#6B4F3F", "#A0522D"];
+const currency = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 2,
+});
 
 const buildAnalytics = (orders, menuItems = []) => {
   const now = new Date();
@@ -135,17 +144,18 @@ const KpiCard = ({ icon: Icon, label, value, sub, color }) => (
 );
 
 /* ── Analytics Tab ───────────────────────────────── */
-const AnalyticsTab = ({ orders, menuItems }) => {
+const AnalyticsTab = ({ orders, menuItems, analytics }) => {
   const { totalRevenue, totalOrders, avgOrderValue, pendingOrders, dailyRevenue, categoryRevenue, topItems } =
     buildAnalytics(orders, menuItems);
 
   return (
     <div className="space-y-8">
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={IndianRupee} label="Total Revenue" value={`₹${totalRevenue.toFixed(2)}`} color="bg-primary" />
-        <KpiCard icon={ShoppingCart} label="Total Orders" value={totalOrders} color="bg-accent" />
-        <KpiCard icon={TrendingUp} label="Avg Order Value" value={`₹${avgOrderValue.toFixed(2)}`} color="bg-green-600" />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+        <KpiCard icon={CalendarDays} label="Today's Revenue" value={currency.format(analytics.today_revenue || 0)} color="bg-primary" />
+        <KpiCard icon={TrendingUp} label="Weekly Revenue" value={currency.format(analytics.week_revenue || 0)} color="bg-green-600" />
+        <KpiCard icon={WalletCards} label="Monthly Revenue" value={currency.format(analytics.month_revenue || 0)} color="bg-amber-600" />
+        <KpiCard icon={ShoppingCart} label="Total Orders" value={analytics.total_orders || 0} color="bg-accent" />
+        <KpiCard icon={IndianRupee} label="Total Revenue" value={currency.format(analytics.total_revenue || 0)} color="bg-slate-700" />
         <KpiCard icon={Clock} label="Active Orders" value={pendingOrders} sub="pending + preparing" color="bg-yellow-500" />
       </div>
 
@@ -235,16 +245,30 @@ const AnalyticsTab = ({ orders, menuItems }) => {
 
 /* ── Main Component ──────────────────────────────── */
 export const AdminDashboard = () => {
-  const { user, token, logout, loading: authLoading } = useAuth();
+  const { user, logout, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const intervalRef = useRef(null);
+  const wsRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const knownOrderIdsRef = useRef(new Set());
 
   const [menuItems, setMenuItems] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [analytics, setAnalytics] = useState({
+    today_revenue: 0,
+    week_revenue: 0,
+    month_revenue: 0,
+    total_orders: 0,
+    total_revenue: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [orderFilters, setOrderFilters] = useState({
+    startDate: "",
+    endDate: "",
+  });
 
   const [formData, setFormData] = useState({
     name: "",
@@ -257,6 +281,17 @@ export const AdminDashboard = () => {
     available: true,
     tags: [],
   });
+
+  const getOrderFilterParams = useCallback(() => {
+    const params = {};
+    if (orderFilters.startDate) {
+      params.start_date = orderFilters.startDate;
+    }
+    if (orderFilters.endDate) {
+      params.end_date = orderFilters.endDate;
+    }
+    return params;
+  }, [orderFilters.endDate, orderFilters.startDate]);
 
   /* ── Auth ─────────────────────────────── */
   const handleUnauthorized = useCallback(() => {
@@ -272,14 +307,15 @@ export const AdminDashboard = () => {
   /* ── Fetch ────────────────────────────── */
   const fetchData = useCallback(async () => {
     try {
-      const [menuRes, orderRes] = await Promise.all([
-        axios.get(`${API}/menu/items`),
-        axios.get(`${API}/admin/orders`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const [menuRes, orderRes, analyticsRes] = await Promise.all([
+        apiClient.get("/menu/items"),
+        apiClient.get("/admin/orders", { params: getOrderFilterParams() }),
+        apiClient.get("/admin/analytics"),
       ]);
       setMenuItems(menuRes.data);
       setOrders(orderRes.data);
+      setAnalytics(analyticsRes.data);
+      knownOrderIdsRef.current = new Set((orderRes.data || []).map((order) => order.id));
     } catch (err) {
       if (err.response?.status === 401) {
         handleUnauthorized();
@@ -289,14 +325,17 @@ export const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [handleUnauthorized, token]);
+  }, [getOrderFilterParams, handleUnauthorized]);
 
   const fetchOrdersOnly = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/admin/orders`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setOrders(res.data);
+      const [ordersRes, analyticsRes] = await Promise.all([
+        apiClient.get("/admin/orders", { params: getOrderFilterParams() }),
+        apiClient.get("/admin/analytics"),
+      ]);
+      setOrders(ordersRes.data);
+      setAnalytics(analyticsRes.data);
+      knownOrderIdsRef.current = new Set((ordersRes.data || []).map((order) => order.id));
     } catch (err) {
       if (err.response?.status === 401) {
         handleUnauthorized();
@@ -304,16 +343,12 @@ export const AdminDashboard = () => {
       }
       console.error("Order polling failed");
     }
-  }, [handleUnauthorized, token]);
+  }, [getOrderFilterParams, handleUnauthorized]);
 
   useEffect(() => {
     if (authLoading) return;
     if (!user || user.role !== "admin") {
       navigate("/");
-      return;
-    }
-    if (!token) {
-      handleUnauthorized();
       return;
     }
     fetchData();
@@ -323,7 +358,99 @@ export const AdminDashboard = () => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [authLoading, fetchData, fetchOrdersOnly, handleUnauthorized, navigate, token, user]);
+  }, [authLoading, fetchData, fetchOrdersOnly, handleUnauthorized, navigate, user]);
+
+  useEffect(() => {
+    if (!user || user.role !== "admin") {
+      return;
+    }
+
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, [user]);
+
+  const playNotificationSound = useCallback(() => {
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return;
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContextCtor();
+    }
+
+    const context = audioContextRef.current;
+    if (context.state === "suspended") {
+      context.resume().catch(() => {});
+    }
+
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    const now = context.currentTime;
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, now);
+    oscillator.frequency.exponentialRampToValueAtTime(1174, now + 0.18);
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.45);
+  }, []);
+
+  useEffect(() => {
+    if (authLoading || !user || user.role !== "admin") {
+      return undefined;
+    }
+
+    wsRef.current = new WebSocket(ORDER_WS_URL);
+
+    wsRef.current.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type !== "new_order" || !data.order) {
+          return;
+        }
+
+        if (knownOrderIdsRef.current.has(data.order.id)) {
+          return;
+        }
+
+        knownOrderIdsRef.current.add(data.order.id);
+        setOrders((currentOrders) => [data.order, ...currentOrders]);
+        playNotificationSound();
+        toast.success(`New order from ${data.order.user_name}`, {
+          description: `Order #${data.order.id.slice(0, 8)} for Rs ${Number(data.order.total_amount || 0).toFixed(2)}`,
+        });
+
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("New order received", {
+            body: `${data.order.user_name} placed order #${data.order.id.slice(0, 8)} for Rs ${Number(data.order.total_amount || 0).toFixed(2)}`,
+            icon: "/favicon.ico",
+            tag: `admin-order-${data.order.id}`,
+            renotify: true,
+          });
+        }
+      } catch (error) {
+        if (event.data !== "pong") {
+          console.error("Failed to process admin order event", error);
+        }
+      }
+    };
+
+    wsRef.current.onclose = () => {
+      wsRef.current = null;
+    };
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close(1000, "Admin dashboard cleanup");
+        wsRef.current = null;
+      }
+    };
+  }, [authLoading, playNotificationSound, user]);
 
   /* ── Menu CRUD ────────────────────────── */
   const handleSubmit = async (e) => {
@@ -336,14 +463,10 @@ export const AdminDashboard = () => {
     };
     try {
       if (editingItem) {
-        await axios.put(`${API}/menu/items/${editingItem.id}`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await apiClient.put(`/menu/items/${editingItem.id}`, payload);
         toast.success("Menu item updated");
       } else {
-        await axios.post(`${API}/menu/items`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await apiClient.post("/menu/items", payload);
         toast.success("Menu item added");
       }
       resetForm();
@@ -356,13 +479,23 @@ export const AdminDashboard = () => {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`${API}/menu/items/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await apiClient.delete(`/menu/items/${id}`);
       toast.success("Item deleted");
       fetchData();
     } catch {
       toast.error("Failed to delete item");
+    }
+  };
+
+  const toggleMenuAvailability = async (itemId, available) => {
+    try {
+      await apiClient.patch(`/admin/menu/${itemId}/availability`, { available });
+      setMenuItems((currentItems) =>
+        currentItems.map((item) => (item.id === itemId ? { ...item, available } : item)),
+      );
+      toast.success(available ? "Item marked available" : "Item marked out of stock");
+    } catch {
+      toast.error("Failed to update availability");
     }
   };
 
@@ -386,16 +519,44 @@ export const AdminDashboard = () => {
   /* ── Order Status ─────────────────────── */
   const updateOrderStatus = async (orderId, status) => {
     try {
-      await axios.put(
-        `${API}/admin/orders/${orderId}/status`,
-        { status },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      await apiClient.put(`/admin/orders/${orderId}/status`, { status });
       toast.success("Order status updated");
       fetchOrdersOnly();
     } catch {
       toast.error("Failed to update order");
     }
+  };
+
+  const handleExportOrders = async () => {
+    try {
+      const response = await apiClient.get("/admin/orders/export", {
+        params: getOrderFilterParams(),
+        responseType: "blob",
+      });
+      const blob = new Blob([response.data], { type: "text/csv" });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = "orders.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success("Orders CSV downloaded");
+    } catch {
+      toast.error("Failed to export orders");
+    }
+  };
+
+  const applyOrderFilters = async () => {
+    await fetchOrdersOnly();
+  };
+
+  const resetOrderFilters = () => {
+    setOrderFilters({
+      startDate: "",
+      endDate: "",
+    });
   };
 
   /* ── Loading ──────────────────────────── */
@@ -556,6 +717,16 @@ export const AdminDashboard = () => {
                   <img src={item.image_url} alt={item.name} className="w-16 h-16 rounded-lg object-cover shrink-0" />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold truncate">{item.name}</h3>
+                    <div className="mt-2 flex items-center gap-3">
+                      <Switch
+                        checked={!!item.available}
+                        onCheckedChange={(checked) => toggleMenuAvailability(item.id, checked)}
+                        aria-label={`Toggle availability for ${item.name}`}
+                      />
+                      <span className={`text-xs font-medium ${item.available ? "text-green-700" : "text-amber-700"}`}>
+                        {item.available ? "Available" : "Out of Stock"}
+                      </span>
+                    </div>
                     <p className="text-sm text-gray-500">₹{item.price}</p>
                   </div>
                   <div className="flex gap-2">
@@ -577,6 +748,41 @@ export const AdminDashboard = () => {
 
           {/* ─── ORDERS ─────────────────────────── */}
           <TabsContent value="orders">
+            <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-border/40 bg-white p-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <div>
+                  <Label htmlFor="orders-start-date">Start Date</Label>
+                  <Input
+                    id="orders-start-date"
+                    type="date"
+                    value={orderFilters.startDate}
+                    onChange={(e) => setOrderFilters((current) => ({ ...current, startDate: e.target.value }))}
+                    className="mt-1 w-full sm:w-44"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="orders-end-date">End Date</Label>
+                  <Input
+                    id="orders-end-date"
+                    type="date"
+                    value={orderFilters.endDate}
+                    onChange={(e) => setOrderFilters((current) => ({ ...current, endDate: e.target.value }))}
+                    className="mt-1 w-full sm:w-44"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={applyOrderFilters}>
+                    Apply Filter
+                  </Button>
+                  <Button variant="ghost" onClick={resetOrderFilters}>
+                    Reset
+                  </Button>
+                </div>
+              </div>
+              <Button variant="outline" onClick={handleExportOrders}>
+                Export Orders CSV
+              </Button>
+            </div>
             <div className="space-y-4">
               {orders.length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-xl">
@@ -629,7 +835,7 @@ export const AdminDashboard = () => {
 
           {/* ─── ANALYTICS ──────────────────────── */}
           <TabsContent value="analytics">
-            <AnalyticsTab orders={orders} menuItems={menuItems} />
+            <AnalyticsTab orders={orders} menuItems={menuItems} analytics={analytics} />
           </TabsContent>
         </Tabs>
       </div>

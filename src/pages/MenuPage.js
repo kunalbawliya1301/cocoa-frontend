@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useCart } from "../context/CartContext";
 import { Button } from "../components/ui/button";
 import { toast } from "sonner";
-import axios from "axios";
 import { Search, Filter, MapPin } from "lucide-react";
 import { Input } from "../components/ui/input";
-import { API } from "../lib/api";
+import { apiClient } from "../lib/api";
 import {
   Select,
   SelectContent,
@@ -83,6 +82,7 @@ export const MenuPage = () => {
   const [loading, setLoading] = useState(true);
   const { addToCart, setTableNumber } = useCart();
   const [searchParams] = useSearchParams();
+  const refreshTimerRef = useRef(null);
 
   /* ── Read ?table=N from URL ─────────────────────────── */
   const tableParam = searchParams.get("table");
@@ -94,7 +94,7 @@ export const MenuPage = () => {
 
   const fetchMenu = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/menu/items`);
+      const response = await apiClient.get("/menu/items");
       setMenuItems(response.data);
     } catch {
       toast.error("Failed to load menu");
@@ -105,7 +105,7 @@ export const MenuPage = () => {
 
   const fetchCategories = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/menu/categories`);
+      const response = await apiClient.get("/menu/categories");
       setCategories(response.data.categories);
     } catch {
       console.error("Failed to load categories");
@@ -141,6 +141,27 @@ export const MenuPage = () => {
     fetchMenu();
     fetchCategories();
   }, [fetchMenu, fetchCategories]);
+
+  useEffect(() => {
+    refreshTimerRef.current = setInterval(() => {
+      fetchMenu();
+    }, 5000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchMenu();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      if (refreshTimerRef.current) {
+        clearInterval(refreshTimerRef.current);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchMenu]);
 
   useEffect(() => {
     filterItems();

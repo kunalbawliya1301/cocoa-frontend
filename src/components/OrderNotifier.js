@@ -1,22 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import axios from 'axios';
-import { API, ORDER_WS_URL } from '../lib/api';
+import { apiClient } from '../lib/api';
 
 export const OrderNotifier = () => {
-  const { user, token } = useAuth();
-  const wsRef = useRef(null);
-  const pingTimerRef = useRef(null);
-  const reconnectTimerRef = useRef(null);
+  const { user } = useAuth();
   const pollingTimerRef = useRef(null);
   const recentNotificationsRef = useRef(new Map());
   const knownOrderStatusesRef = useRef(new Map());
   const initializedOrdersRef = useRef(false);
 
   useEffect(() => {
-    // Only connect if the user is authenticated
-    if (!user || !token) return;
+    if (!user) return;
     knownOrderStatusesRef.current.clear();
     initializedOrdersRef.current = false;
 
@@ -64,9 +59,7 @@ export const OrderNotifier = () => {
 
     const syncOrdersAndNotifyChanges = async (silentBootstrap = false) => {
       try {
-        const res = await axios.get(`${API}/orders/my`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await apiClient.get('/orders/my');
         const orders = Array.isArray(res.data) ? res.data : [];
 
         for (const order of orders) {
@@ -92,79 +85,17 @@ export const OrderNotifier = () => {
         }
       }
     };
-
-    const connectWebSocket = () => {
-      // Create WebSocket connection
-      wsRef.current = new WebSocket(`${ORDER_WS_URL}/${token}`);
-
-      wsRef.current.onopen = () => {
-        console.log('WebSocket Connected for Order Notifications');
-        if (pingTimerRef.current) clearInterval(pingTimerRef.current);
-        pingTimerRef.current = setInterval(() => {
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send('ping');
-          }
-        }, 25000);
-      };
-
-      wsRef.current.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (data.type === 'order_status_update') {
-            knownOrderStatusesRef.current.set(data.order_id, data.status);
-            notifyStatusChange(data.order_id, data.status);
-          }
-          if (data.type === 'ws_connected') {
-            console.log('Order notifier socket handshake complete');
-          }
-        } catch (err) {
-          if (event.data !== 'pong') {
-            console.error('Error processing WebSocket message:', err);
-          }
-        }
-      };
-
-      wsRef.current.onerror = (error) => {
-        console.error('WebSocket Error:', error);
-      };
-
-      wsRef.current.onclose = (event) => {
-        console.log('WebSocket Disconnected', event);
-        if (pingTimerRef.current) {
-          clearInterval(pingTimerRef.current);
-          pingTimerRef.current = null;
-        }
-        // Attempt to reconnect after a delay if not cleanly closed
-        if (event.code !== 1000) {
-           reconnectTimerRef.current = setTimeout(connectWebSocket, 5000);
-        }
-      };
-    };
-
-    connectWebSocket();
     syncOrdersAndNotifyChanges(true);
     pollingTimerRef.current = setInterval(() => {
       syncOrdersAndNotifyChanges();
     }, 15000);
 
-    // Cleanup on unmount or when token changes
     return () => {
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-      }
-      if (pingTimerRef.current) {
-        clearInterval(pingTimerRef.current);
-      }
       if (pollingTimerRef.current) {
         clearInterval(pollingTimerRef.current);
       }
-      if (wsRef.current) {
-        // Normal closure code
-        wsRef.current.close(1000, "Disconnecting"); 
-      }
     };
-  }, [user, token]);
+  }, [user]);
 
   // This component doesn't render anything visible
   return null;

@@ -5,8 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Clock, Package, CheckCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import axios from 'axios';
-import { API } from '../lib/api';
+import { apiClient } from '../lib/api';
 
 const statusConfig = {
   pending: { icon: Clock, label: 'Pending', color: 'text-yellow-600', bg: 'bg-yellow-50' },
@@ -46,7 +45,7 @@ const formatDateTime = (order) => {
 /* ------------------------------------------------------- */
 
 export const UserDashboard = () => {
-  const { user, token, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [orders, setOrders] = useState([]);
@@ -55,21 +54,19 @@ export const UserDashboard = () => {
 
   const fetchOrders = useCallback(async (silent = false) => {
     try {
-      const res = await axios.get(`${API}/orders/my`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiClient.get('/orders/my');
       setOrders(res.data || []);
     } catch {
       if (!silent) toast.error('Failed to load orders');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
 
-    if (!user || !token) {
+    if (!user) {
       navigate('/login');
       return;
     }
@@ -81,7 +78,7 @@ export const UserDashboard = () => {
     }, 10000);
 
     return () => clearInterval(pollingRef.current);
-  }, [authLoading, fetchOrders, navigate, token, user]);
+  }, [authLoading, fetchOrders, navigate, user]);
 
   if (authLoading || loading) {
     return (
