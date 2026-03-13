@@ -12,8 +12,16 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
+  const clearServerSession = useCallback(async () => {
+    try {
+      await apiClient.post("/auth/logout");
+    } catch {
+      // Best-effort cleanup for stale or invalid cookies.
+    }
+  }, []);
+
   const validateSession = useCallback(
-    async ({ logoutOn401 = true } = {}) => {
+    async ({ logoutOn401 = true, cleanupInvalidCookie = false } = {}) => {
       try {
         const res = await apiClient.get("/auth/me");
         setUser(res.data);
@@ -22,14 +30,17 @@ export const AuthProvider = ({ children }) => {
         if (logoutOn401 && (err.response?.status === 401 || err.response?.status === 403)) {
           clearSession();
         }
+        if (cleanupInvalidCookie && (err.response?.status === 401 || err.response?.status === 403)) {
+          await clearServerSession();
+        }
         return false;
       }
     },
-    [clearSession],
+    [clearServerSession, clearSession],
   );
 
   useEffect(() => {
-    validateSession({ logoutOn401: false }).finally(() => {
+    validateSession({ logoutOn401: false, cleanupInvalidCookie: true }).finally(() => {
       setLoading(false);
     });
   }, [validateSession]);
@@ -45,27 +56,45 @@ export const AuthProvider = ({ children }) => {
   }, [user, validateSession]);
 
   const login = async (email, password) => {
-    await apiClient.post("/auth/login", {
-      email,
-      password,
-    });
+    try {
+      await apiClient.post("/auth/login", {
+        email,
+        password,
+      });
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        await clearServerSession();
+        clearSession();
+      }
+      throw err;
+    }
 
-    const isValid = await validateSession({ logoutOn401: false });
+    const isValid = await validateSession({ logoutOn401: false, cleanupInvalidCookie: true });
     if (!isValid) {
+      await clearServerSession();
       clearSession();
       throw new Error("Session validation failed");
     }
   };
 
   const signup = async (name, email, password) => {
-    await apiClient.post("/auth/signup", {
-      name,
-      email,
-      password,
-    });
+    try {
+      await apiClient.post("/auth/signup", {
+        name,
+        email,
+        password,
+      });
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        await clearServerSession();
+        clearSession();
+      }
+      throw err;
+    }
 
-    const isValid = await validateSession({ logoutOn401: false });
+    const isValid = await validateSession({ logoutOn401: false, cleanupInvalidCookie: true });
     if (!isValid) {
+      await clearServerSession();
       clearSession();
       throw new Error("Session validation failed");
     }
@@ -73,13 +102,13 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(async () => {
     try {
-      await apiClient.post("/auth/logout");
+      await clearServerSession();
     } catch {
       // Clear local auth state even if the server cookie was already missing.
     } finally {
       clearSession();
     }
-  }, [clearSession]);
+  }, [clearServerSession, clearSession]);
 
   return (
     <AuthContext.Provider
