@@ -9,6 +9,7 @@ export const OrderNotifier = () => {
   const recentNotificationsRef = useRef(new Map());
   const knownOrderStatusesRef = useRef(new Map());
   const initializedOrdersRef = useRef(false);
+  const reviewUrl = (process.env.REACT_APP_GOOGLE_REVIEW_URL || '').trim();
 
   useEffect(() => {
     if (!user) return;
@@ -26,6 +27,8 @@ export const OrderNotifier = () => {
       const notificationKey = `${orderId}:${status}`;
       const now = Date.now();
       const previous = recentNotificationsRef.current.get(notificationKey);
+      const isCompleted = status === 'completed';
+      const shouldPromptForReview = isCompleted && Boolean(reviewUrl);
 
       // Prevent duplicate notifications from reconnect/retry bursts.
       if (previous && now - previous < 120000) {
@@ -33,10 +36,14 @@ export const OrderNotifier = () => {
       }
       recentNotificationsRef.current.set(notificationKey, now);
 
-      const title = `Order Update: #${orderId.slice(0, 8)}`;
-      const message = `Your order status is now: ${status.toUpperCase()}`;
+      const title = shouldPromptForReview
+        ? `Order Complete: #${orderId.slice(0, 8)}`
+        : `Order Update: #${orderId.slice(0, 8)}`;
+      const message = shouldPromptForReview
+        ? 'Your order is complete. Tap to leave a quick Google review.'
+        : `Your order status is now: ${status.toUpperCase()}`;
 
-      if (!document.hidden) {
+      if (!document.hidden && !shouldPromptForReview) {
         toast.custom(
           () => (
             <div className="w-[320px] rounded-xl border border-amber-200 bg-white px-4 py-3 shadow-lg">
@@ -48,12 +55,38 @@ export const OrderNotifier = () => {
           { duration: 5000 }
         );
       } else if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, {
+        const notification = new Notification(title, {
           body: message,
           icon: '/favicon.ico',
           tag: notificationKey,
           renotify: false,
         });
+
+        if (shouldPromptForReview) {
+          notification.onclick = () => {
+            notification.close();
+            window.focus();
+            window.open(reviewUrl, '_blank', 'noopener,noreferrer');
+          };
+        }
+      } else if (!document.hidden && shouldPromptForReview) {
+        toast.custom(
+          () => (
+            <div className="w-[340px] rounded-xl border border-amber-200 bg-white px-4 py-3 shadow-lg">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">Order complete</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{title}</p>
+              <p className="mt-1 text-sm text-slate-600">{message}</p>
+              <button
+                type="button"
+                className="mt-3 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                onClick={() => window.open(reviewUrl, '_blank', 'noopener,noreferrer')}
+              >
+                Leave a review
+              </button>
+            </div>
+          ),
+          { duration: 8000 }
+        );
       }
     };
 
@@ -95,7 +128,7 @@ export const OrderNotifier = () => {
         clearInterval(pollingTimerRef.current);
       }
     };
-  }, [user]);
+  }, [reviewUrl, user]);
 
   // This component doesn't render anything visible
   return null;
