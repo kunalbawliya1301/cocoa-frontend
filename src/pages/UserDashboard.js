@@ -14,6 +14,11 @@ const statusConfig = {
   completed: { icon: CheckCircle, label: 'Completed', color: 'text-green-600', bg: 'bg-green-50' },
 };
 
+const paymentMethodLabel = {
+  online: 'Online',
+  counter: 'Pay at Counter',
+};
+
 /* ---------------- DATE + TIME (IST SAFE) ---------------- */
 const formatDateTime = (order) => {
   const raw =
@@ -149,6 +154,9 @@ export const UserDashboard = () => {
 
                         <p className={`text-xs sm:text-sm mt-0.5 ${statusInfo.color}`}>
                           {statusInfo.label}
+                        </p>
+                        <p className="text-xs sm:text-sm mt-0.5 text-gray-500">
+                          {paymentMethodLabel[order.payment_method] || 'Online'} • {order.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
                         </p>
                       </div>
                     </div>

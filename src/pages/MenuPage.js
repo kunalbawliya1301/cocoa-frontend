@@ -174,6 +174,10 @@ export const MenuPage = () => {
   };
 
   const handleAddToCart = (item) => {
+    if (!item.available) {
+      toast.error(`${item.name} is currently out of stock`);
+      return;
+    }
     addToCart(item);
     toast.success(`${item.name} added to cart`);
   };
@@ -281,6 +285,7 @@ export const MenuPage = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-8">
             {filteredItems.map((item, idx) => {
               const itemTags = getItemTags(item);
+              const isUnavailable = item.available === false;
               return (
                 <motion.div
                   key={item.id}
@@ -299,12 +304,21 @@ export const MenuPage = () => {
                     <img
                       src={item.image_url}
                       alt={item.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      className={`w-full h-full object-cover transition-transform duration-500 ${
+                        isUnavailable ? "grayscale opacity-75" : "group-hover:scale-110"
+                      }`}
                     />
                     <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-primary text-primary-foreground px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-sm font-medium">
                       ₹{item.price.toFixed(2)}
                     </div>
 
+                    {isUnavailable && (
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                        <span className="rounded-full bg-white/95 text-amber-700 border border-amber-200 px-3 py-1 text-xs sm:text-sm font-semibold">
+                          Out of Stock
+                        </span>
+                      </div>
+                    )}
                     {/* Dietary badge pills on image */}
                     {itemTags.length > 0 && (
                       <div className="absolute bottom-2 left-2 flex flex-wrap gap-1">
@@ -345,6 +359,7 @@ export const MenuPage = () => {
 
                     <Button
                       onClick={() => handleAddToCart(item)}
+                      disabled={isUnavailable}
                       className="
                         w-full rounded-full
                         h-9 sm:h-11
@@ -355,7 +370,7 @@ export const MenuPage = () => {
                         active:scale-95
                       "
                     >
-                      Add to Cart
+                      {isUnavailable ? "Currently Unavailable" : "Add to Cart"}
                     </Button>
                   </div>
                 </motion.div>

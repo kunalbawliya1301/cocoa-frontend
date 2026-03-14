@@ -1,4 +1,3 @@
-// CartPage.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -16,29 +15,61 @@ export const CartPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("online");
+  const isTableOrder = Boolean(tableNumber);
 
-  const handleCheckout = async () => {
-    if (!user) {
-      toast.error("Please sign in to place an order");
-      navigate("/login");
+  const orderItems = cart.map((item) => ({
+    menu_item_id: item.id,
+    quantity: item.quantity,
+  }));
+
+  const buildOrderPayload = (method) => ({
+    items: orderItems,
+    payment_method: method,
+    ...(tableNumber ? { table_number: tableNumber } : {}),
+  });
+
+  const ensureUser = () => {
+    if (user) {
+      return true;
+    }
+
+    toast.error("Please sign in to place an order");
+    navigate("/login");
+    return false;
+  };
+
+  const handleCounterCheckout = async () => {
+    if (!ensureUser()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await apiClient.post("/orders", buildOrderPayload("counter"));
+      clearCart();
+      toast.success("Order placed. Please pay at the counter.");
+      navigate("/dashboard");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to place counter payment order");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOnlineCheckout = async () => {
+    if (!ensureUser()) {
       return;
     }
 
     try {
       setLoading(true);
 
-      // 1️⃣ Create Razorpay order
-      const { data: order } = await apiClient.post(
-        "/payments/create-order",
-        {
-          items: cart.map((item) => ({
-            menu_item_id: item.id,
-            quantity: item.quantity,
-          })),
-        },
-      );
+      const { data: order } = await apiClient.post("/payments/create-order", {
+        items: orderItems,
+      });
 
-      // 2️⃣ Open Razorpay
       const options = {
         key: process.env.REACT_APP_RAZORPAY_KEY_ID,
         amount: order.amount,
@@ -46,40 +77,24 @@ export const CartPage = () => {
         name: "CoCoa Cafe",
         description: "Order Payment",
         order_id: order.order_id,
-
-        handler: async function (response) {
+        handler: async (response) => {
           try {
-            // 3️⃣ Verify payment
-            await apiClient.post(
-              "/payments/verify",
-              {
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              },
-            );
+            await apiClient.post("/payments/verify", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
 
-            // 4️⃣ Create order in DB
-            await apiClient.post(
-              "/orders",
-              {
-                items: cart.map((item) => ({
-                  menu_item_id: item.id,
-                  quantity: item.quantity,
-                })),
-                ...(tableNumber ? { table_number: tableNumber } : {}),
-              },
-            );
+            await apiClient.post("/orders", buildOrderPayload("online"));
 
             clearCart();
-            toast.success("Payment successful 🎉 Order placed!");
+            toast.success("Payment successful. Order placed!");
             navigate("/dashboard");
           } catch (err) {
             console.error(err);
-            toast.error("Payment verified but order failed");
+            toast.error("Payment verified but order creation failed");
           }
         },
-
         theme: {
           color: "#6b4f3f",
         },
@@ -93,6 +108,15 @@ export const CartPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCheckout = async () => {
+    if (paymentMethod === "counter") {
+      await handleCounterCheckout();
+      return;
+    }
+
+    await handleOnlineCheckout();
   };
 
   if (cart.length === 0) {
@@ -118,7 +142,6 @@ export const CartPage = () => {
               key={item.id}
               className="bg-white rounded-2xl p-4 sm:p-6"
             >
-              {/* MOBILE LAYOUT */}
               <div className="flex sm:hidden gap-4">
                 <img
                   src={item.image_url}
@@ -132,12 +155,11 @@ export const CartPage = () => {
                     {item.category}
                   </p>
                   <p className="font-bold text-sm mt-1">
-                    ₹{item.price.toFixed(2)}
+                    Rs {item.price.toFixed(2)}
                   </p>
                 </div>
               </div>
 
-              {/* DESKTOP LAYOUT (UNCHANGED) */}
               <div className="hidden sm:flex gap-6">
                 <img
                   src={item.image_url}
@@ -150,7 +172,7 @@ export const CartPage = () => {
                   <p className="text-sm text-muted-foreground">
                     {item.category}
                   </p>
-                  <p className="font-bold text-lg">₹{item.price.toFixed(2)}</p>
+                  <p className="font-bold text-lg">Rs {item.price.toFixed(2)}</p>
                 </div>
 
                 <Button
@@ -162,7 +184,6 @@ export const CartPage = () => {
                 </Button>
               </div>
 
-              {/* QUANTITY + ACTIONS */}
               <div className="mt-4 flex justify-between items-center sm:justify-end sm:gap-4">
                 <Button
                   size="icon"
@@ -198,10 +219,59 @@ export const CartPage = () => {
         </div>
 
         <div className="bg-muted/30 p-4 sm:p-8 rounded-2xl">
+          <div className="mb-6">
+            <p className="text-sm sm:text-base font-semibold mb-3">Payment method</p>
+            {isTableOrder ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("online")}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    paymentMethod === "online"
+                      ? "border-primary bg-primary/5"
+                      : "border-border bg-white"
+                  }`}
+                >
+                  <p className="font-semibold">Pay Online</p>
+                  <p className="text-sm text-muted-foreground">
+                    Pay now and send a confirmed paid order to the kitchen.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("counter")}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    paymentMethod === "counter"
+                      ? "border-primary bg-primary/5"
+                      : "border-border bg-white"
+                  }`}
+                >
+                  <p className="font-semibold">Pay at Counter</p>
+                  <p className="text-sm text-muted-foreground">
+                    Order from the table now and settle payment at the counter.
+                  </p>
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-primary bg-primary/5 p-4">
+                <p className="font-semibold">Pay Online</p>
+                <p className="text-sm text-muted-foreground">
+                  Regular orders are paid online before they are placed.
+                </p>
+              </div>
+            )}
+            {isTableOrder && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                This order will be linked to table {tableNumber}.
+              </p>
+            )}
+          </div>
+
           <div className="flex justify-between mb-4">
             <span className="text-sm sm:text-lg">Subtotal</span>
             <span className="text-lg sm:text-2xl font-bold">
-              ₹{getTotal().toFixed(2)}
+              Rs {getTotal().toFixed(2)}
             </span>
           </div>
 
@@ -210,7 +280,11 @@ export const CartPage = () => {
             disabled={loading}
             className="w-full h-12 sm:h-14 text-base sm:text-lg"
           >
-            {loading ? "Processing..." : "Checkout"}
+            {loading
+              ? "Processing..."
+              : paymentMethod === "online"
+                ? "Pay Online"
+                : "Place Order and Pay at Counter"}
           </Button>
         </div>
       </div>

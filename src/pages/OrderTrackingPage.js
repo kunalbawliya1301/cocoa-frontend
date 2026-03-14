@@ -14,6 +14,11 @@ const statusConfig = {
   completed: { icon: CheckCircle, label: 'Completed', color: 'text-green-600', bg: 'bg-green-50' },
 };
 
+const paymentMethodLabel = {
+  online: 'Online',
+  counter: 'Pay at Counter',
+};
+
 export const OrderTrackingPage = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -117,6 +122,11 @@ export const OrderTrackingPage = () => {
 
           <div className="border-t pt-6">
             <h3 className="font-semibold mb-4">Order Details</h3>
+            <div className="mb-4 grid gap-2 sm:grid-cols-2 text-sm text-muted-foreground">
+              <p>Payment method: {paymentMethodLabel[order.payment_method] || 'Online'}</p>
+              <p>Payment status: {order.payment_status === 'paid' ? 'Paid' : 'Unpaid'}</p>
+              {order.table_number && <p>Table: {order.table_number}</p>}
+            </div>
             {order.items.map((item, i) => (
               <div key={i} className="flex justify-between mb-2">
                 <span>{item.quantity}x {item.name}</span>

@@ -74,6 +74,16 @@ const currency = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
+const paymentMethodLabel = {
+  online: "Online",
+  counter: "Pay at Counter",
+};
+
+const paymentStatusStyles = {
+  paid: "bg-green-50 text-green-700 border-green-200",
+  unpaid: "bg-amber-50 text-amber-700 border-amber-200",
+};
+
 const buildAnalytics = (orders, menuItems = []) => {
   const now = new Date();
   const totalRevenue = orders.reduce((s, o) => s + (o.total_amount || 0), 0);
@@ -537,6 +547,18 @@ export const AdminDashboard = () => {
     }
   };
 
+  const updatePaymentStatus = async (orderId, paymentStatus) => {
+    try {
+      await apiClient.put(`/admin/orders/${orderId}/payment-status`, {
+        payment_status: paymentStatus,
+      });
+      toast.success("Payment status updated");
+      fetchOrdersOnly();
+    } catch {
+      toast.error("Failed to update payment status");
+    }
+  };
+
   const handleExportOrders = async () => {
     try {
       const response = await apiClient.get("/admin/orders/export", {
@@ -810,33 +832,56 @@ export const AdminDashboard = () => {
                           </p>
                           {order.table_number && (
                             <span className="text-[10px] sm:text-xs bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-semibold">
-                              📍 Table {order.table_number}
+                              Table {order.table_number}
                             </span>
                           )}
+                          <span className="text-[10px] sm:text-xs bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-full font-semibold">
+                            {paymentMethodLabel[order.payment_method] || "Online"}
+                          </span>
+                          <span
+                            className={`text-[10px] sm:text-xs border px-2 py-0.5 rounded-full font-semibold ${paymentStatusStyles[order.payment_status] || paymentStatusStyles.unpaid}`}
+                          >
+                            {order.payment_status === "paid" ? "Paid" : "Unpaid"}
+                          </span>
                         </div>
                         <p className="text-xs sm:text-sm text-gray-600">{order.user_name}</p>
                         <p className="text-xs text-gray-500">{formatDateTime(order)}</p>
                       </div>
-                      <p className="font-bold text-sm sm:text-base">₹{order.total_amount.toFixed(2)}</p>
+                      <p className="font-bold text-sm sm:text-base">Rs {order.total_amount.toFixed(2)}</p>
                     </div>
 
                     {order.items.map((item, i) => (
                       <p key={i} className="text-xs sm:text-sm">
-                        {item.quantity}× {item.name}
+                        {item.quantity}x {item.name}
                       </p>
                     ))}
 
-                    <Select value={order.status} onValueChange={(s) => updateOrderStatus(order.id, s)}>
-                      <SelectTrigger className="w-full sm:w-48 mt-3">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="preparing">Preparing</SelectItem>
-                        <SelectItem value="ready">Ready</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                      <Select value={order.status} onValueChange={(s) => updateOrderStatus(order.id, s)}>
+                        <SelectTrigger className="w-full sm:w-48">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="preparing">Preparing</SelectItem>
+                          <SelectItem value="ready">Ready</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Select
+                        value={order.payment_status || "unpaid"}
+                        onValueChange={(value) => updatePaymentStatus(order.id, value)}
+                      >
+                        <SelectTrigger className="w-full sm:w-48">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="paid">Paid</SelectItem>
+                          <SelectItem value="unpaid">Unpaid</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 ))
               )}
