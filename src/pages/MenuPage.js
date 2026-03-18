@@ -364,7 +364,7 @@ export const MenuPage = () => {
                     transition={{ delay: groupIndex * 0.04 }}
                     className="pt-4 pb-1"
                   >
-                    <h2 className="text-[16px] font-black tracking-tight text-slate-900">
+                    <h2 className="inline-block px-4 py-1.5 bg-rose-100 text-rose-900 rounded-xl text-[16px] font-black tracking-tight mb-2">
                       {group.category}
                     </h2>
                   </motion.div>
@@ -693,7 +693,8 @@ export const MenuPage = () => {
                 return (
                   <label 
                     key={tag.key} 
-                    className={`flex items-center gap-3 rounded-xl border-2 p-3.5 transition active:scale-[0.98] ${
+                    onClick={() => toggleTag(tag.key)}
+                    className={`flex items-center gap-3 rounded-xl border-2 p-3.5 transition active:scale-[0.98] cursor-pointer ${
                       isActive ? "border-rose-500 bg-rose-50" : "border-slate-100 bg-white"
                     }`}
                   >
