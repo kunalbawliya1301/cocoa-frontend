@@ -185,34 +185,8 @@ export const LandingPage = () => {
 /* ================= COFFEE IMAGE + BEANS ================= */
 
 const CoffeeScroller = () => {
-  const beans = [...Array(8)].map((_, i) => ({
-    id: i,
-    size: Math.random() * 14 + 26,
-    top: Math.random() * 70 + 5,
-    left: Math.random() * 70 + 5,
-    rotate: Math.random() * 360,
-    duration: Math.random() * 4 + 6,
-  }));
-
   return (
     <div className="relative h-[280px] sm:h-[360px] md:h-[520px] flex items-center justify-center">
-      {beans.map((b) => (
-        <motion.img
-          key={b.id}
-          src="/coffee-bean.png"
-          drag
-          className="absolute z-40 cursor-grab"
-          style={{
-            width: b.size,
-            top: `${b.top}%`,
-            left: `${b.left}%`,
-            rotate: b.rotate,
-          }}
-          animate={{ y: [0, -16, 0] }}
-          transition={{ duration: b.duration, repeat: Infinity }}
-        />
-      ))}
-
       <img
         src="/hero.png"
         alt="Coffee Splash"

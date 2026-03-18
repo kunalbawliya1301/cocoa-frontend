@@ -100,6 +100,10 @@ export const CartPage = () => {
         },
       };
 
+      if (!window.Razorpay) {
+        toast.error("Payment gateway failed to load. Please disable ad-blockers and try again.");
+        return;
+      }
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err) {

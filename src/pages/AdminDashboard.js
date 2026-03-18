@@ -633,7 +633,7 @@ export const AdminDashboard = () => {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[425px]">
                 <DialogHeader>
                   <DialogTitle>{editingItem ? "Edit Item" : "Add Item"}</DialogTitle>
                 </DialogHeader>
@@ -661,8 +661,8 @@ export const AdminDashboard = () => {
                   </div>
 
                   <div>
-                    <Label>Category</Label>
-                    <Input value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} />
+                    <Label>Categories (comma separated)</Label>
+                    <Input value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} placeholder="e.g. Coffee, Bestseller, Breakfast" />
                   </div>
 
                   <div>
@@ -703,10 +703,12 @@ export const AdminDashboard = () => {
                     <Label>Dietary Tags</Label>
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       {[
-                        { key: "vegan", label: "🌱 Vegan" },
-                        { key: "gluten-free", label: "🌾 Gluten-Free" },
-                        { key: "nut-free", label: "🥜 Nut-Free" },
-                        { key: "caffeine-free", label: "☕ Caffeine-Free" },
+                        { key: "veg", label: "Veg" },
+                        { key: "non-veg", label: "Non-Veg" },
+                        { key: "vegan", label: "Vegan" },
+                        { key: "gluten-free", label: "Gluten-Free" },
+                        { key: "nut-free", label: "Nut-Free" },
+                        { key: "caffeine-free", label: "Caffeine-Free" },
                       ].map((tag) => {
                         const isChecked = (formData.tags || []).includes(tag.key);
                         return (

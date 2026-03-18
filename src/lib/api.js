@@ -24,3 +24,15 @@ apiClient.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Auto-clear stale tokens so a 401 doesn't loop forever
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      window.localStorage.removeItem("token");
+      window.localStorage.removeItem("user");
+    }
+    return Promise.reject(error);
+  }
+);
