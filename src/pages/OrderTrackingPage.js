@@ -53,12 +53,19 @@ export const OrderTrackingPage = () => {
 
     fetchOrder();
 
-    pollingRef.current = setInterval(() => {
-      fetchOrder(true); // silent polling
-    }, 5000);
+    let isActive = true;
+    const pollOrder = async () => {
+      if (!isActive) return;
+      await fetchOrder(true); // silent polling
+      if (isActive) {
+        pollingRef.current = setTimeout(pollOrder, 5000);
+      }
+    };
+    pollingRef.current = setTimeout(pollOrder, 5000);
 
     return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
+      isActive = false;
+      if (pollingRef.current) clearTimeout(pollingRef.current);
     };
   }, [authLoading, fetchOrder, navigate, user]);
 

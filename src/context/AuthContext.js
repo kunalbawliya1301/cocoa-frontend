@@ -63,11 +63,21 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (!token) return;
 
-    const intervalId = setInterval(() => {
-      validateSession();
-    }, 10 * 60 * 1000);
+    let isActive = true;
+    let intervalId;
+    const pollSession = async () => {
+      if (!isActive) return;
+      await validateSession();
+      if (isActive) {
+        intervalId = setTimeout(pollSession, 10 * 60 * 1000);
+      }
+    };
+    intervalId = setTimeout(pollSession, 10 * 60 * 1000);
 
-    return () => clearInterval(intervalId);
+    return () => {
+      isActive = false;
+      clearTimeout(intervalId);
+    };
   }, [token, validateSession]);
 
   const login = async (email, password) => {

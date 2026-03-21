@@ -119,13 +119,21 @@ export const OrderNotifier = () => {
       }
     };
     syncOrdersAndNotifyChanges(true);
-    pollingTimerRef.current = setInterval(() => {
-      syncOrdersAndNotifyChanges();
-    }, 15000);
+    
+    let isActive = true;
+    const pollOrders = async () => {
+      if (!isActive) return;
+      await syncOrdersAndNotifyChanges();
+      if (isActive) {
+        pollingTimerRef.current = setTimeout(pollOrders, 15000);
+      }
+    };
+    pollingTimerRef.current = setTimeout(pollOrders, 15000);
 
     return () => {
+      isActive = false;
       if (pollingTimerRef.current) {
-        clearInterval(pollingTimerRef.current);
+        clearTimeout(pollingTimerRef.current);
       }
     };
   }, [reviewUrl, user]);

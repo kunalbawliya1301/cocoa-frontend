@@ -362,10 +362,21 @@ export const AdminDashboard = () => {
       return;
     }
     fetchData();
-    intervalRef.current = setInterval(fetchOrdersOnly, 5000);
+    
+    let isActive = true;
+    const pollOrdersOnly = async () => {
+      if (!isActive) return;
+      await fetchOrdersOnly();
+      if (isActive) {
+        intervalRef.current = setTimeout(pollOrdersOnly, 5000);
+      }
+    };
+    intervalRef.current = setTimeout(pollOrdersOnly, 5000);
+
     return () => {
+      isActive = false;
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        clearTimeout(intervalRef.current);
       }
     };
   }, [authLoading, fetchData, fetchOrdersOnly, handleUnauthorized, navigate, user]);

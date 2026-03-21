@@ -78,11 +78,20 @@ export const UserDashboard = () => {
 
     fetchOrders();
 
-    pollingRef.current = setInterval(() => {
-      fetchOrders(true);
-    }, 10000);
+    let isActive = true;
+    const pollOrders = async () => {
+      if (!isActive) return;
+      await fetchOrders(true);
+      if (isActive) {
+        pollingRef.current = setTimeout(pollOrders, 10000);
+      }
+    };
+    pollingRef.current = setTimeout(pollOrders, 10000);
 
-    return () => clearInterval(pollingRef.current);
+    return () => {
+      isActive = false;
+      if (pollingRef.current) clearTimeout(pollingRef.current);
+    };
   }, [authLoading, fetchOrders, navigate, user]);
 
   if (authLoading || loading) {

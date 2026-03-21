@@ -220,9 +220,18 @@ export const MenuPage = () => {
   }, [fetchCategories, fetchMenu, fetchTopItems]);
 
   useEffect(() => {
-    refreshTimerRef.current = setInterval(() => {
-      fetchMenu();
-    }, 5000);
+    let isActive = true;
+
+    const pollMenu = async () => {
+      if (!isActive) return;
+      await fetchMenu();
+      if (isActive) {
+        refreshTimerRef.current = setTimeout(pollMenu, 5000);
+      }
+    };
+
+    // Start polling
+    refreshTimerRef.current = setTimeout(pollMenu, 5000);
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
@@ -233,8 +242,9 @@ export const MenuPage = () => {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      isActive = false;
       if (refreshTimerRef.current) {
-        clearInterval(refreshTimerRef.current);
+        clearTimeout(refreshTimerRef.current);
       }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
