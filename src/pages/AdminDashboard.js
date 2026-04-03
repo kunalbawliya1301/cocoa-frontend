@@ -29,6 +29,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Plus, Pencil, Trash2, Package, QrCode, TrendingUp, ShoppingCart, IndianRupee, Clock, CalendarDays, WalletCards } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient, ORDER_WS_URL } from "../lib/api";
+import { showNotification, initNotifications } from "../lib/notifications";
 import {
   BarChart,
   Bar,
@@ -314,6 +315,42 @@ export const AdminDashboard = () => {
     navigate("/login", { replace: true });
   }, [logout, navigate]);
 
+  /* ── Notification sound ───────────────── */
+  // Defined here (before fetchOrdersOnly) to avoid a Temporal Dead Zone error.
+  const playNotificationSound = useCallback(() => {
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return;
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContextCtor();
+    }
+
+    const context = audioContextRef.current;
+    if (context.state === "suspended") {
+      context.resume().catch(() => {});
+    }
+
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    const now = context.currentTime;
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, now);
+    oscillator.frequency.exponentialRampToValueAtTime(1174, now + 0.18);
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.45);
+  }, []);
+
+  // Keep a stable ref so fetchOrdersOnly can call it without a dep-array entry
+  const playNotificationSoundRef = useRef(playNotificationSound);
+  useEffect(() => { playNotificationSoundRef.current = playNotificationSound; }, [playNotificationSound]);
+
   /* ── Fetch ────────────────────────────── */
   const fetchData = useCallback(async () => {
     try {
@@ -343,9 +380,32 @@ export const AdminDashboard = () => {
         apiClient.get("/admin/orders", { params: getOrderFilterParams() }),
         apiClient.get("/admin/analytics"),
       ]);
-      setOrders(ordersRes.data);
+
+      const freshOrders = ordersRes.data || [];
+
+      // ── Detect brand-new orders that the WS may have missed ──────────
+      // (happens during a WS reconnect window)
+      const prevKnown = knownOrderIdsRef.current;
+      const newOrders = freshOrders.filter((o) => !prevKnown.has(o.id));
+
+      if (newOrders.length > 0) {
+        newOrders.forEach((order) => {
+          playNotificationSoundRef.current();
+          toast.success(`New order from ${order.user_name}`, {
+            description: `Order #${order.id.slice(0, 8)} for Rs ${Number(order.total_amount || 0).toFixed(2)}`,
+          });
+          showNotification("New order received", {
+            body: `${order.user_name} placed order #${order.id.slice(0, 8)} for Rs ${Number(order.total_amount || 0).toFixed(2)}`,
+            tag: `admin-order-${order.id}`,
+            renotify: true,
+            url: "/admin",
+          });
+        });
+      }
+
+      setOrders(freshOrders);
       setAnalytics(analyticsRes.data);
-      knownOrderIdsRef.current = new Set((ordersRes.data || []).map((order) => order.id));
+      knownOrderIdsRef.current = new Set(freshOrders.map((order) => order.id));
     } catch (err) {
       if (err.response?.status === 401) {
         handleUnauthorized();
@@ -386,96 +446,94 @@ export const AdminDashboard = () => {
       return;
     }
 
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission().catch(() => {});
-    }
+    // Register SW + request notification permission.
+    // This is the ONLY way that works on mobile Chrome and minimised desktop tabs.
+    initNotifications();
   }, [user]);
 
-  const playNotificationSound = useCallback(() => {
-    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextCtor) return;
-
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContextCtor();
-    }
-
-    const context = audioContextRef.current;
-    if (context.state === "suspended") {
-      context.resume().catch(() => {});
-    }
-
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-    const now = context.currentTime;
-
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(880, now);
-    oscillator.frequency.exponentialRampToValueAtTime(1174, now + 0.18);
-    gainNode.gain.setValueAtTime(0.0001, now);
-    gainNode.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(context.destination);
-    oscillator.start(now);
-    oscillator.stop(now + 0.45);
-  }, []);
 
   useEffect(() => {
     if (authLoading || !user || user.role !== "admin" || !token) {
       return undefined;
     }
 
-    wsRef.current = new WebSocket(`${ORDER_WS_URL}/${token}`);
+    let isActive = true;
+    let reconnectDelay = 2000; // start at 2s, doubles on each failure (max 30s)
+    let pingInterval = null;
 
-    wsRef.current.onmessage = (event) => {
-      try {
-        if (typeof event.data !== "string") {
-          return;
-        }
-        const trimmed = event.data.trim();
-        if (!trimmed || trimmed === "pong" || !/^[{\[]/.test(trimmed)) {
-          return;
-        }
+    const connectWS = () => {
+      if (!isActive) return;
 
-        const data = JSON.parse(trimmed);
-        if (data.type !== "new_order" || !data.order) {
-          return;
-        }
+      const ws = new WebSocket(`${ORDER_WS_URL}/${token}`);
+      wsRef.current = ws;
 
-        if (knownOrderIdsRef.current.has(data.order.id)) {
-          return;
-        }
+      // ── Keepalive: ping every 20s so the server never times us out ──
+      ws.onopen = () => {
+        reconnectDelay = 2000; // reset backoff on successful connect
+        pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send("ping");
+          }
+        }, 20000);
+      };
 
-        knownOrderIdsRef.current.add(data.order.id);
-        setOrders((currentOrders) => [data.order, ...currentOrders]);
-        playNotificationSound();
-        toast.success(`New order from ${data.order.user_name}`, {
-          description: `Order #${data.order.id.slice(0, 8)} for Rs ${Number(data.order.total_amount || 0).toFixed(2)}`,
-        });
+      ws.onmessage = (event) => {
+        try {
+          if (typeof event.data !== "string") return;
+          const trimmed = event.data.trim();
+          if (!trimmed || trimmed === "pong" || !/^[{\[]/.test(trimmed)) return;
 
-        if ("Notification" in window && Notification.permission === "granted") {
-          new Notification("New order received", {
+          const data = JSON.parse(trimmed);
+          if (data.type !== "new_order" || !data.order) return;
+          if (knownOrderIdsRef.current.has(data.order.id)) return;
+
+          knownOrderIdsRef.current.add(data.order.id);
+          setOrders((currentOrders) => [data.order, ...currentOrders]);
+          playNotificationSound();
+          toast.success(`New order from ${data.order.user_name}`, {
+            description: `Order #${data.order.id.slice(0, 8)} for Rs ${Number(data.order.total_amount || 0).toFixed(2)}`,
+          });
+
+          // SW notification — works on minimised desktop tabs
+          showNotification("New order received", {
             body: `${data.order.user_name} placed order #${data.order.id.slice(0, 8)} for Rs ${Number(data.order.total_amount || 0).toFixed(2)}`,
-            icon: "/favicon.ico",
             tag: `admin-order-${data.order.id}`,
             renotify: true,
+            url: "/admin",
           });
+        } catch (error) {
+          console.error("Failed to process admin order event", error, event.data);
         }
-      } catch (error) {
-        console.error("Failed to process admin order event", error, event.data);
-      }
+      };
+
+      ws.onerror = (error) => {
+        console.error("Admin order WebSocket error", error);
+      };
+
+      // ── Auto-reconnect on unexpected close ───────────────────────────
+      ws.onclose = (event) => {
+        clearInterval(pingInterval);
+        pingInterval = null;
+        wsRef.current = null;
+
+        // code 1000 = intentional close (cleanup); don't reconnect
+        if (!isActive || event.code === 1000) return;
+
+        console.warn(`Admin WS closed (code=${event.code}), reconnecting in ${reconnectDelay}ms`);
+        setTimeout(() => {
+          if (isActive) connectWS();
+        }, reconnectDelay);
+
+        // Exponential backoff: 2s → 4s → 8s → … capped at 30s
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+      };
     };
 
-    wsRef.current.onerror = (error) => {
-      console.error("Admin order WebSocket error", error);
-    };
-
-    wsRef.current.onclose = () => {
-      wsRef.current = null;
-    };
+    connectWS();
 
     return () => {
+      isActive = false;
+      clearInterval(pingInterval);
       if (wsRef.current) {
         wsRef.current.close(1000, "Admin dashboard cleanup");
         wsRef.current = null;
